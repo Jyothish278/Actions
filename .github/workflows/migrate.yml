@@ -32,11 +32,19 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/$Owner/$Repo/environments/$dest_env/secrets/keys")
-      
+
             key_id=$(echo "$key_info" | jq -r '.key_id')
             public_key=$(echo "$key_info" | jq -r '.key' | base64 --decode)
-            encrypted_value=$(echo -n "$value" | openssl rsautl -encrypt -pubin -inkey <(echo "$public_key") | base64 | tr -d '\n')
-      
+
+            # Encrypt the value
+            encrypted_value=$(echo -n "$value" | openssl pkeyutl -encrypt -pubin -inkey <(echo "$public_key") | base64 | tr -d '\n')
+
+            # Check if the encryption was successful
+            if [ -z "$encrypted_value" ]; then
+              echo "Encryption failed for secret: $name"
+              exit 1
+            fi
+
             # Create the secret in the destination environment
             curl -L -X PUT \
               -H "Accept: application/vnd.github+json" \
