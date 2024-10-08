@@ -5,20 +5,8 @@ on:
 
 jobs:
   migrate:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '20'
-
-      - name: Install Dependencies
-        run: |
-          npm install libsodium-wrappers
-
       - name: Get Secrets from Source Environment
         id: get-secrets
         run: |
@@ -26,43 +14,37 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
           response=$(curl -L \
-                       -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                        -H "Accept: application/vnd.github+json" \
+                       -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                        -H "X-GitHub-Api-Version: 2022-11-28" \
                        "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets")
 
           echo "$response" | jq -r '.secrets[] | "\(.name)=\(.value)"' > secrets.env
-
+          
       - name: Create Secrets in Destination Environment
         run: |
           dest_env="pilot-env"
           owner="Jyothish278"
-          repo="Actions"
+          repo="Actions"          
           
+          # Get the public key for the destination environment
+          key_info=$(curl -L \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/public-key")
+      
+          key_id=$(echo "$key_info" | jq -r '.key_id')
+          public_key=$(echo "$key_info" | jq -r '.key')
+      
+          # Decode the public key and write to a temporary file
+          echo "$public_key" | base64 --decode > public_key.pem
+      
           while IFS='=' read -r name value; do
-            # Get the public key for the destination environment
-            key_info=$(curl -L \
-              -X GET \
-              -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/public-key")
-            
-            key_id=$(echo "$key_info" | jq -r '.key_id')
-            public_key=$(echo "$key_info" | jq -r '.key')
-
-            # Write a Node.js script to handle the encryption
-            echo "const sodium = require('libsodium-wrappers');" > encrypt.js
-            echo "sodium.ready.then(() => {" >> encrypt.js
-            echo "  const publicKey = sodium.from_base64('$public_key');" >> encrypt.js
-            echo "  const value = '$value';" >> encrypt.js
-            echo "  const encrypted = sodium.crypto_box_seal(value, publicKey);" >> encrypt.js
-            echo "  console.log(sodium.to_base64(encrypted));" >> encrypt.js
-            echo "});" >> encrypt.js
-
-            # Run the Node.js script
-            encrypted_value=$(node encrypt.js)
-
+            # Encrypt the value using the public key
+            encrypted_value=$(echo -n "$value" | openssl rsautl -encrypt -pubin -inkey public_key.pem | base64 | tr -d '\n')
+      
             # Create the secret in the destination environment
             curl -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -71,7 +53,7 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
           done < secrets.env
-
+          
       - name: Get Variables from Source Environment
         id: get-vars
         run: |
@@ -79,8 +61,8 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
           response=$(curl -L \
-                       -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                        -H "Accept: application/vnd.github+json" \
+                       -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                        -H "X-GitHub-Api-Version: 2022-11-28" \
                        "https://api.github.com/repos/$owner/$repo/environments/$source_env/variables")
 
@@ -97,5 +79,6 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
+              -d "{\"value\":\"$value\"}" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$name"
           done < vars.env
