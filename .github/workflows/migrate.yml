@@ -26,7 +26,7 @@ jobs:
           dest_env="pilot-env"
           owner="Jyothish278"
           repo="Actions"          
-          
+      
           # Get the public key for the destination environment
           key_info=$(curl -L \
             -X GET \
@@ -42,8 +42,14 @@ jobs:
           echo "$public_key" | base64 --decode > public_key.pem
       
           while IFS='=' read -r name value; do
-            # Encrypt the value using the public key
-            encrypted_value=$(echo -n "$value" | openssl rsautl -encrypt -pubin -inkey public_key.pem | base64 | tr -d '\n')
+            # Encrypt the value using the public key with pkeyutl
+            encrypted_value=$(echo -n "$value" | openssl pkeyutl -encrypt -pubin -inkey public_key.pem | base64 | tr -d '\n')
+      
+            # Check if the encryption was successful
+            if [ -z "$encrypted_value" ]; then
+              echo "Encryption failed for secret: $name"
+              exit 1
+            fi
       
             # Create the secret in the destination environment
             curl -L -X PUT \
@@ -53,6 +59,8 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
           done < secrets.env
+
+
           
       - name: Get Variables from Source Environment
         id: get-vars
