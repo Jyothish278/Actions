@@ -5,7 +5,7 @@ on:
 
 jobs:
   migrate:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Get Secrets from Source Environment
         id: get-secrets
@@ -14,18 +14,19 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
           response=$(curl -L \
-                       -H "Accept: application/vnd.github+json" \
                        -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+                       -H "Accept: application/vnd.github+json" \
                        -H "X-GitHub-Api-Version: 2022-11-28" \
                        "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets")
 
           echo "$response" | jq -r '.secrets[] | "\(.name)=\(.value)"' > secrets.env
-          
+
       - name: Create Secrets in Destination Environment
         run: |
           dest_env="pilot-env"
           owner="Jyothish278"
-          repo="Actions"          
+          repo="Actions"
+          
           while IFS='=' read -r name value; do
             # Get the public key for the destination environment
             key_info=$(curl -L \
@@ -34,29 +35,22 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/public-key")
-      
+            
             key_id=$(echo "$key_info" | jq -r '.key_id')
             public_key=$(echo "$key_info" | jq -r '.key')
-      
-            # Debug: Output the key ID and raw public key
-            echo "Key ID: $key_id"
-            echo "Raw Public Key: $public_key"
-      
-            # Decode the public key
-            decoded_public_key=$(echo "$public_key" | base64 --decode)
-      
-            # Write the decoded public key to a temporary file
-            echo "$decoded_public_key" > public_key.pem
-      
-            # Encrypt the value using the public key
-            encrypted_value=$(echo -n "$value" | openssl rsautl -encrypt -pubin -inkey public_key.pem | base64 | tr -d '\n')
-      
-            # Check if the encryption was successful
-            if [ -z "$encrypted_value" ]; then
-              echo "Encryption failed for secret: $name"
-              exit 1
-            fi
-      
+
+            # Write a Node.js script to handle the encryption
+            echo "const sodium = require('libsodium-wrappers');" > encrypt.js
+            echo "sodium.ready.then(() => {" >> encrypt.js
+            echo "  const publicKey = sodium.from_base64('$public_key');" >> encrypt.js
+            echo "  const value = '$value';" >> encrypt.js
+            echo "  const encrypted = sodium.crypto_box_seal(value, publicKey);" >> encrypt.js
+            echo "  console.log(sodium.to_base64(encrypted));" >> encrypt.js
+            echo "});" >> encrypt.js
+
+            # Run the Node.js script
+            encrypted_value=$(node encrypt.js)
+
             # Create the secret in the destination environment
             curl -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -66,7 +60,6 @@ jobs:
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
           done < secrets.env
 
-          
       - name: Get Variables from Source Environment
         id: get-vars
         run: |
@@ -74,8 +67,8 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
           response=$(curl -L \
-                       -H "Accept: application/vnd.github+json" \
                        -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+                       -H "Accept: application/vnd.github+json" \
                        -H "X-GitHub-Api-Version: 2022-11-28" \
                        "https://api.github.com/repos/$owner/$repo/environments/$source_env/variables")
 
@@ -92,6 +85,5 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              -d "{\"value\":\"$value\"}" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$name"
           done < vars.env
