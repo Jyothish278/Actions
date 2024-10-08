@@ -38,11 +38,16 @@ jobs:
           key_id=$(echo "$key_info" | jq -r '.key_id')
           public_key=$(echo "$key_info" | jq -r '.key')
       
-          # Decode the public key and check the output
-          echo "$public_key" | base64 --decode > public_key.pem
+          # Create the public key file with proper PEM format
+          {
+            echo "-----BEGIN PUBLIC KEY-----"
+            echo "$public_key" | fold -w 64  # Wrap lines to 64 characters
+            echo "-----END PUBLIC KEY-----"
+          } > public_key.pem
+      
           echo "Public key decoded. Contents:"
           cat public_key.pem
-      
+        
           while IFS='=' read -r name value; do
             # Encrypt the value using the public key with pkeyutl
             encrypted_value=$(echo -n "$value" | openssl pkeyutl -encrypt -pubin -inkey public_key.pem | base64 | tr -d '\n')
@@ -61,6 +66,7 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
           done < secrets.env
+
           
       - name: Get Variables from Source Environment
         id: get-vars
