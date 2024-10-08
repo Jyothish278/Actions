@@ -1,0 +1,59 @@
+name: Migrate Environment Secrets and Variables
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: self-hosted
+    steps:
+      - name: Get Secrets from Source Environment
+        id: get-secrets
+        run: |
+          source_env="test-env"
+          response=$(curl -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/Actions/environments/$source_env/secrets")
+
+          echo "$response" | jq -r '.secrets[] | "\(.name)=\(.value)"' > secrets.env
+
+      - name: Create Secrets in Destination Environment
+        run: |
+          dest_env="pilot-env"
+          while IFS='=' read -r name value; do
+            # Encrypt the value using the destination environment's public key
+            key_info=$(curl -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/Actions/environments/$dest_env/secrets/keys")
+
+            key_id=$(echo "$key_info" | jq -r '.key_id')
+            public_key=$(echo "$key_info" | jq -r '.key' | base64 --decode)
+            encrypted_value=$(echo -n "$value" | openssl rsautl -encrypt -pubin -inkey <(echo "$public_key") | base64 | tr -d '\n')
+
+            # Create the secret in the destination environment
+            curl -X PUT -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
+              "https://api.github.com/repos/Actions/environments/$dest_env/secrets/$name"
+          done < secrets.env
+
+      - name: Get Variables from Source Environment
+        id: get-vars
+        run: |
+          source_env="test-env"
+          response=$(curl -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/Actions/environments/$source_env/variables")
+
+          echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
+
+      - name: Create Variables in Destination Environment
+        run: |
+          dest_env="pilot-env"
+          while IFS='=' read -r name value; do
+            # Create the variable in the destination environment
+            curl -X PUT -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"value\":\"$value\"}" \
+              "https://api.github.com/repos/Actions/environments/$dest_env/variables/$name"
+          done < vars.env
