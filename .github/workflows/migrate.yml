@@ -20,7 +20,7 @@ jobs:
                        "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets")
 
           echo "$response" | jq -r '.secrets[] | "\(.name)=\(.value)"' > secrets.env
-          
+
       - name: Create Secrets in Destination Environment
         run: |
           dest_env="pilot-env"
@@ -38,31 +38,13 @@ jobs:
           key_id=$(echo "$key_info" | jq -r '.key_id')
           public_key=$(echo "$key_info" | jq -r '.key')
       
-          # Check if the public key is valid
-          if [[ -z "$public_key" ]]; then
-            echo "Public key not found."
-            exit 1
-          fi
-      
-          # Create the public key file with proper PEM format
-          {
-            echo "-----BEGIN PUBLIC KEY-----"
-            echo "$public_key" | fold -w 64  # Ensure line breaks
-            echo "-----END PUBLIC KEY-----"
-          } > public_key.pem
-        
-          echo "Public key created. Contents:"
-          cat public_key.pem
-      
-          # Verify if the public key is valid
-          if ! openssl rsa -pubin -in public_key.pem -text -noout; then
-            echo "Failed to read the public key."
-            exit 1
-          fi
+          # Use the public key directly for encryption
+          # Create a temporary file for the public key
+          echo "$public_key" | base64 --decode > public_key.bin
         
           while IFS='=' read -r name value; do
-            # Encrypt the value using the public key with pkeyutl
-            encrypted_value=$(echo -n "$value" | openssl pkeyutl -encrypt -pubin -inkey public_key.pem | base64 | tr -d '\n')
+            # Encrypt the value using the public key
+            encrypted_value=$(echo -n "$value" | openssl pkeyutl -encrypt -pubin -inkey public_key.bin | base64 | tr -d '\n')
         
             # Check if the encryption was successful
             if [ -z "$encrypted_value" ]; then
@@ -78,8 +60,7 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
           done < secrets.env
-      
-     
+           
           
       - name: Get Variables from Source Environment
         id: get-vars
