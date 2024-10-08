@@ -25,7 +25,7 @@ jobs:
         run: |
           dest_env="pilot-env"
           owner="Jyothish278"
-          repo="Actions"          
+          repo="Actions"
       
           # Get the public key for the destination environment
           key_info=$(curl -L \
@@ -37,7 +37,7 @@ jobs:
         
           key_id=$(echo "$key_info" | jq -r '.key_id')
           public_key=$(echo "$key_info" | jq -r '.key')
-        
+      
           # Check if the public key is valid
           if [[ -z "$public_key" ]]; then
             echo "Public key not found."
@@ -53,6 +53,12 @@ jobs:
         
           echo "Public key created. Contents:"
           cat public_key.pem
+      
+          # Verify if the public key is valid
+          if ! openssl rsa -pubin -in public_key.pem -text -noout; then
+            echo "Failed to read the public key."
+            exit 1
+          fi
         
           while IFS='=' read -r name value; do
             # Encrypt the value using the public key with pkeyutl
@@ -72,6 +78,7 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
           done < secrets.env
+      
      
           
       - name: Get Variables from Source Environment
