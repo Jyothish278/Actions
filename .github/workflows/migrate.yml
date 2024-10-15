@@ -87,7 +87,8 @@ jobs:
             exit 1
           fi
 
-          echo "$response" | jq -r '.[].name + "=" + .[].value' > vars.env
+          # Corrected jq command to extract names and values
+          echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
 
       - name: Create Variables in Destination Environment
         run: |
