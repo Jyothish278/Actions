@@ -60,7 +60,13 @@ jobs:
 
             # Check if the retrieval was successful
             if [[ "$(echo "$secret_value" | jq -r '.message')" == "Not Found" ]]; then
-              echo "Secret '$name' not found in source environment."
+              echo "Secret '$name' not found in source environment. API Response: $secret_value"
+              continue
+            fi
+
+            # Check for errors in the API response
+            if [[ "$(echo "$secret_value" | jq -r '.value')" == "null" ]]; then
+              echo "Error retrieving value for secret '$name'. API Response: $secret_value"
               continue
             fi
 
