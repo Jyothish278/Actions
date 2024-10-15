@@ -14,11 +14,11 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
           secrets_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets"
+
           response=$(curl -L \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28"   
- \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
             "$secrets_url")
 
           # Handle potential errors during secret retrieval
@@ -27,7 +27,7 @@ jobs:
             exit 1
           fi
 
-          echo "$response" | jq -r '.[].name, .[].encrypted_value' | tr '\n' ' ' > secrets.env
+          echo "$response" | jq -r '.[].name + "=" + .[].encrypted_value' > secrets.env
 
       - name: Create Secrets in Destination Environment
         run: |
@@ -35,68 +35,5 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
 
-          # No need to retrieve public key anymore (encrypted_value is present in response from step 1)
-          while IFS='=' read -r name encrypted_value; do
-            # Handle empty value case, which can cause curl error
-            if [[ -z "$encrypted_value" ]]; then
-              echo "Skipping secret '$name' due to empty encrypted value"
-              continue
-            fi
-
-            create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
-            curl -L -X PUT \
-              -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -d "{\"encrypted_value\":\"$encrypted_value\"}" \
-              "$create_secret_url"
-
-            # Handle potential errors during secret creation
-            if [ $? -ne 0 ]; then
-              echo "Error creating secret '$name': $response"
-              exit 1
-            fi
-          done < secrets.env
-
-      - name: Get Variables from Source Environment
-        id: get-vars
-        run: |
-          source_env="test-env"
-          owner="Jyothish287"  # Potential typo corrected here
-          repo="Actions"
-          vars_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/variables"
-          response=$(curl -L \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28"   
- \
-            "$vars_url")
-
-          # Handle potential errors during variable retrieval
-          if [ $? -ne 0 ]; then
-            echo "Error fetching variables: $response"
-            exit 1
-          fi
-
-          echo "$response" | jq -r '.[].name, .[].value' | tr '\n' ' ' > vars.env
-
-      - name: Create Variables in Destination Environment
-        run: |
-          dest_env="pilot-env"
-          owner="Jyothish287"  # Potential typo corrected here
-          repo="Actions"
-          while IFS='=' read -r name value; do
-            create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$name"
-            curl -L -X PUT \
-              -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -d "{\"value\":\"$value\"}" \
-              "$create_var_url"
-
-            # Handle potential errors during variable creation
-            if [ $? -ne 0 ]; then
-              echo "Error creating variable '$name': $response"
-              exit 1
-            fi
-          done < vars.env
+          # Create each secret in the destination environment
+          while IFS='=' read 
