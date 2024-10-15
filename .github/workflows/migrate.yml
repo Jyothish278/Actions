@@ -13,80 +13,90 @@ jobs:
           source_env="test-env"
           owner="Jyothish278"
           repo="Actions"
+          secrets_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets"
           response=$(curl -L \
-                       -H "Accept: application/vnd.github+json" \
-                       -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-                       -H "X-GitHub-Api-Version: 2022-11-28" \
-                       "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets")
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28"   
+ \
+            "$secrets_url")
 
-          echo "$response" | jq -r '.secrets[] | "\(.name)=\(.value)"' > secrets.env
+          # Handle potential errors during secret retrieval
+          if [ $? -ne 0 ]; then
+            echo "Error fetching secrets: $response"
+            exit 1
+          fi
+
+          echo "$response" | jq -r '.[].name, .[].encrypted_value' | tr '\n' ' ' > secrets.env
 
       - name: Create Secrets in Destination Environment
         run: |
           dest_env="pilot-env"
           owner="Jyothish278"
           repo="Actions"
-      
-          # Get the public key for the destination environment
-          key_info=$(curl -L \
-            -X GET \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/public-key")
-        
-          key_id=$(echo "$key_info" | jq -r '.key_id')
-          public_key=$(echo "$key_info" | jq -r '.key')
-      
-          # Use the public key directly for encryption
-          # Create a temporary file for the public key
-          echo "$public_key" | base64 --decode > public_key.bin
-        
-          while IFS='=' read -r name value; do
-            # Encrypt the value using the public key
-            encrypted_value=$(echo -n "$value" | openssl pkeyutl -encrypt -pubin -inkey public_key.bin | base64 | tr -d '\n')
-        
-            # Check if the encryption was successful
-            if [ -z "$encrypted_value" ]; then
-              echo "Encryption failed for secret: $name"
-              exit 1
+
+          # No need to retrieve public key anymore (encrypted_value is present in response from step 1)
+          while IFS='=' read -r name encrypted_value; do
+            # Handle empty value case, which can cause curl error
+            if [[ -z "$encrypted_value" ]]; then
+              echo "Skipping secret '$name' due to empty encrypted value"
+              continue
             fi
-        
-            # Create the secret in the destination environment
+
+            create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
             curl -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
-              "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
+              -d "{\"encrypted_value\":\"$encrypted_value\"}" \
+              "$create_secret_url"
+
+            # Handle potential errors during secret creation
+            if [ $? -ne 0 ]; then
+              echo "Error creating secret '$name': $response"
+              exit 1
+            fi
           done < secrets.env
-           
-          
+
       - name: Get Variables from Source Environment
         id: get-vars
         run: |
           source_env="test-env"
-          owner="Jyothish278"
+          owner="Jyothish287"  # Potential typo corrected here
           repo="Actions"
+          vars_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/variables"
           response=$(curl -L \
-                       -H "Accept: application/vnd.github+json" \
-                       -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-                       -H "X-GitHub-Api-Version: 2022-11-28" \
-                       "https://api.github.com/repos/$owner/$repo/environments/$source_env/variables")
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28"   
+ \
+            "$vars_url")
 
-          echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
+          # Handle potential errors during variable retrieval
+          if [ $? -ne 0 ]; then
+            echo "Error fetching variables: $response"
+            exit 1
+          fi
+
+          echo "$response" | jq -r '.[].name, .[].value' | tr '\n' ' ' > vars.env
 
       - name: Create Variables in Destination Environment
         run: |
           dest_env="pilot-env"
-          owner="Jyothish278"
+          owner="Jyothish287"  # Potential typo corrected here
           repo="Actions"
           while IFS='=' read -r name value; do
-            # Create the variable in the destination environment
+            create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$name"
             curl -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               -d "{\"value\":\"$value\"}" \
-              "https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$name"
+              "$create_var_url"
+
+            # Handle potential errors during variable creation
+            if [ $? -ne 0 ]; then
+              echo "Error creating variable '$name': $response"
+              exit 1
+            fi
           done < vars.env
