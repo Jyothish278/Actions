@@ -13,11 +13,18 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
           
-          # Define your secrets here as a list
-          secrets=("TEST1" "TEST2")  # Replace with your actual secret names
+          # Define your secrets here
+          secret1="${{ secrets.TEST1 }}"
+          secret2="${{ secrets.TEST2 }}"
 
-          for secret in "${secrets[@]}"; do
-            secret_value="${{ secrets[secret] }}"
+          # Create an array of secrets
+          declare -A secrets_map=(
+            ["SECRET1"]="$secret1"
+            ["SECRET2"]="$secret2"
+          )
+
+          for secret in "${!secrets_map[@]}"; do
+            secret_value="${secrets_map[$secret]}"
 
             if [[ -z "$secret_value" ]]; then
               echo "Secret '$secret' not found."
@@ -62,11 +69,18 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
 
-          # Define your variables here as a list
-          vars=("TEST3" "TEST4")  # Replace with your actual variable names
+          # Define your variables here
+          var1="${{ vars.TEST3 }}"
+          var2="${{ vars.TEST4 }}"
 
-          for var in "${vars[@]}"; do
-            var_value="${{ vars[var] }}"
+          # Create an array of variables
+          declare -A vars_map=(
+            ["VAR1"]="$var1"
+            ["VAR2"]="$var2"
+          )
+
+          for var in "${!vars_map[@]}"; do
+            var_value="${vars_map[$var]}"
 
             if [[ -z "$var_value" ]]; then
               echo "Variable '$var' not found."
