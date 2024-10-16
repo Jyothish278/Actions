@@ -50,17 +50,23 @@ jobs:
           # Read the secrets from the file created in the previous step
           while IFS= read -r secret_name; do
             # Get the actual secret value
-            secret_value=$(curl -s -L \
+            secret_value_response=$(curl -s -L \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets/$secret_name")
 
-            if [[ "$(echo "$secret_value" | jq -r '.message')" == "Not Found" ]]; then
+            if [[ "$(echo "$secret_value_response" | jq -r '.message')" == "Not Found" ]]; then
               echo "Secret '$secret_name' not found in source environment."
               continue
             fi
 
-            actual_value=$(echo "$secret_value" | jq -r '.value')
+            actual_value=$(echo "$secret_value_response" | jq -r '.value')
+
+            # Check if actual_value is null or empty
+            if [[ -z "$actual_value" ]]; then
+              echo "No value found for secret '$secret_name'."
+              continue
+            fi
 
             # Encrypt the value using the public key
             encrypted_value=$(echo -n "$actual_value" | openssl pkeyutl -encrypt -pubin -inkey <(echo "$public_key" | base64 --decode) | base64)
