@@ -6,6 +6,7 @@ on:
 jobs:
   migrate:
     runs-on: self-hosted
+    environment: test-env
     steps:
       - name: Create Secrets in Destination Environment
         run: |
