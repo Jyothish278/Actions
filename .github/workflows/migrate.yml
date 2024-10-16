@@ -19,8 +19,8 @@ jobs:
 
           # Create an array of secrets
           declare -A secrets_map=(
-            ["SECRET1"]="$secret1"
-            ["SECRET2"]="$secret2"
+            ["TEST1"]="$secret1"
+            ["TEST2"]="$secret2"
           )
 
           for secret in "${!secrets_map[@]}"; do
@@ -75,8 +75,8 @@ jobs:
 
           # Create an array of variables
           declare -A vars_map=(
-            ["VAR1"]="$var1"
-            ["VAR2"]="$var2"
+            ["TEST3"]="$var1"
+            ["TEST4"]="$var2"
           )
 
           for var in "${!vars_map[@]}"; do
