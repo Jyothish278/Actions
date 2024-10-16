@@ -7,76 +7,39 @@ jobs:
   migrate:
     runs-on: self-hosted
     steps:
-      - name: Get Secrets from Source Environment
-        id: get-secrets
-        run: |
-          source_env="test-env"
-          owner="Jyothish278"
-          repo="Actions"
-          secrets_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets"
-
-          response=$(curl -s -L \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "$secrets_url")
-
-          echo "API Response: $response"
-
-          # Check if the response contains secrets
-          if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
-            echo "No secrets found in source environment."
-            exit 1
-          fi
-
-          # Extract secret names to process
-          echo "$response" | jq -r '.secrets[] | .name' > secrets.env
-
       - name: Create Secrets in Destination Environment
         run: |
           dest_env="pilot-env"
           owner="Jyothish278"
           repo="Actions"
+          
+          # Define your secrets here as a list
+          secrets=("TEST1" "TEST2")  # Replace with your actual secret names
 
-          # Get the public key for the destination environment
-          key_info=$(curl -s -L \
-            -X GET \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/public-key")
+          for secret in "${secrets[@]}"; do
+            secret_value="${{ secrets[secret] }}"
 
-          key_id=$(echo "$key_info" | jq -r '.key_id')
-          public_key=$(echo "$key_info" | jq -r '.key')
+            if [[ -z "$secret_value" ]]; then
+              echo "Secret '$secret' not found."
+              continue
+            fi
 
-          # Iterate over each secret to retrieve its value and encrypt it
-          while IFS= read -r name; do
-            # Get the actual secret value
-            secret_value=$(curl -s -L \
-              -H "Accept: application/vnd.github+json" \
+            # Get the public key for the destination environment
+            key_info=$(curl -s -L \
+              -X GET \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets/$name")
+              "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/public-key")
 
-            # Check if the retrieval was successful
-            if [[ "$(echo "$secret_value" | jq -r '.message')" == "Not Found" ]]; then
-              echo "Secret '$name' not found in source environment. API Response: $secret_value"
-              continue
-            fi
-
-            # Check for errors in the API response
-            if [[ "$(echo "$secret_value" | jq -r '.value')" == "null" ]]; then
-              echo "Error retrieving value for secret '$name'. API Response: $secret_value"
-              continue
-            fi
-
-            actual_value=$(echo "$secret_value" | jq -r '.value')
+            key_id=$(echo "$key_info" | jq -r '.key_id')
+            public_key=$(echo "$key_info" | jq -r '.key')
 
             # Encrypt the value using the public key
-            encrypted_value=$(echo -n "$actual_value" | openssl pkeyutl -encrypt -pubin -inkey <(echo "$public_key" | base64 --decode) | base64)
+            encrypted_value=$(echo -n "$secret_value" | openssl pkeyutl -encrypt -pubin -inkey <(echo "$public_key" | base64 --decode) | base64)
 
             # Create the secret in the destination environment
-            create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$name"
+            create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret"
             create_response=$(curl -s -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
@@ -84,38 +47,14 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
-            # Handle potential errors during secret creation
+            # Check for potential errors
             if [ $? -ne 0 ]; then
-              echo "Error creating secret '$name': $create_response"
+              echo "Error creating secret '$secret': $create_response"
               exit 1
             fi
 
-            echo "Successfully created secret '$name'"
-          done < secrets.env
-
-      - name: Get Variables from Source Environment
-        id: get-vars
-        run: |
-          source_env="test-env"
-          owner="Jyothish278"
-          repo="Actions"
-          vars_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/variables"
-
-          response=$(curl -s -L \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "$vars_url")
-
-          echo "API Response: $response"
-
-          # Check if the response contains variables
-          if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
-            echo "No variables found in source environment."
-            exit 1
-          fi
-
-          echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
+            echo "Successfully created secret '$secret'"
+          done
 
       - name: Create Variables in Destination Environment
         run: |
@@ -123,20 +62,30 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
 
-          while IFS='=' read -r name value; do
-            create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$name"
+          # Define your variables here as a list
+          vars=("TEST3" "TEST4")  # Replace with your actual variable names
+
+          for var in "${vars[@]}"; do
+            var_value="${{ vars[var] }}"
+
+            if [[ -z "$var_value" ]]; then
+              echo "Variable '$var' not found."
+              continue
+            fi
+
+            create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$var"
             create_response=$(curl -s -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              -d "{\"value\":\"$value\"}" \
+              -d "{\"value\":\"$var_value\"}" \
               "$create_var_url")
 
-            # Handle potential errors during variable creation
+            # Check for potential errors
             if [ $? -ne 0 ]; then
-              echo "Error creating variable '$name': $create_response"
+              echo "Error creating variable '$var': $create_response"
               exit 1
             fi
 
-            echo "Successfully created variable '$name'"
-          done < vars.env
+            echo "Successfully created variable '$var'"
+          done
