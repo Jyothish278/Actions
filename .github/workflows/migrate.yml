@@ -62,7 +62,14 @@ jobs:
             placeholder_value="$secret_name"
 
             # Encrypt the placeholder value using the public key
-            encrypted_value=$(python3 ./encrypt_secret.py "$public_key" "$placeholder_value")
+            encrypted_value=$(python3 encrypt_secret.py "$public_key" "$placeholder_value")
+
+            # Log the details before creating the secret
+            echo "Creating secret with:"
+            echo "  Secret Name: $secret_name"
+            echo "  Key ID: $key_id"
+            echo "  Encrypted Value: $encrypted_value"
+            echo "  Create URL: https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
 
             # Create the secret in the destination environment
             create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
@@ -72,7 +79,12 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
-            echo "Create Secret Response: $create_response"  # Log the response for debugging
+            # Log the response and check status
+            echo "Create Secret Response: $create_response"  
+            if [[ -z "$create_response" ]]; then
+              echo "Error creating secret '$secret_name': Empty response from API."
+              exit 1
+            fi
 
             if [[ "$(echo "$create_response" | jq -r '.message')" != "created" ]]; then
               echo "Error creating secret '$secret_name': $create_response"
