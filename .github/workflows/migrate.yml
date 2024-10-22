@@ -79,7 +79,7 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
-            echo "Successfully created secret '$secret_name'"
+            echo "Successfully created secret '$secret_name' with placeholder value"
 
           done < secrets.env
 
