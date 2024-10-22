@@ -53,48 +53,27 @@ jobs:
           key_id=$(echo "$key_info" | jq -r '.key_id')
           public_key=$(echo "$key_info" | jq -r '.key')
 
-          # Create a Python script for encryption
-          cat << 'EOF' > encrypt.py
-          import sys
-          from base64 import b64encode
-          from nacl import encoding, public
-          
-          def encrypt(public_key: str, secret_value: str) -> str:
-              """Encrypt a Unicode string using the public key."""
-              public_key = public.PublicKey(public_key.encode("utf-8"), encoding.Base64Encoder())
-              sealed_box = public.SealedBox(public_key)
-              encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
-              return b64encode(encrypted).decode("utf-8")
-          
-          if __name__ == "__main__":
-              public_key = sys.argv[1]
-              secret_value = sys.argv[2]
-              print(encrypt(public_key, secret_value))
-          EOF
+          # Create a placeholder value
+          placeholder_value="placeholder_value"
 
           # Read the secret names from the file created in the previous step
           while IFS= read -r secret_name; do
-            # Get the actual secret value
-            secret_value_response=$(curl -s -L \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-              "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets/$secret_name")
-
-            if [[ "$(echo "$secret_value_response" | jq -r '.message')" == "Not Found" ]]; then
-              echo "Secret '$secret_name' not found in source environment."
-              continue
-            fi
-
-            actual_value=$(echo "$secret_value_response" | jq -r '.value')
-
-            # Check if actual_value is null or empty
-            if [[ -z "$actual_value" ]]; then
-              echo "No value found for secret '$secret_name'."
-              continue
-            fi
-
-            # Encrypt the secret value using the public key
-            encrypted_value=$(python3 encrypt.py "$public_key" "$actual_value")
+            # Encrypt the placeholder value using the public key
+            encrypted_value=$(python3 -c "
+            import sys
+            from base64 import b64encode
+            from nacl import encoding, public
+            
+            def encrypt(public_key: str, secret_value: str) -> str:
+                public_key = public.PublicKey(public_key.encode('utf-8'), encoding.Base64Encoder())
+                sealed_box = public.SealedBox(public_key)
+                encrypted = sealed_box.encrypt(secret_value.encode('utf-8'))
+                return b64encode(encrypted).decode('utf-8')
+            
+            public_key = sys.argv[1]
+            secret_value = sys.argv[2]
+            print(encrypt(public_key, secret_value))
+            " "$public_key" "$placeholder_value")
 
             # Create the secret in the destination environment
             create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
@@ -109,7 +88,8 @@ jobs:
               exit 1
             fi
 
-            echo "Successfully created secret '$secret_name'"
+            echo "Successfully created secret '$secret_name' with placeholder value"
+
           done < secrets.env
 
       - name: Get Variables from Source Environment
@@ -142,11 +122,12 @@ jobs:
           repo="Actions"
 
           while IFS='=' read -r var_name var_value; do
-            create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables/$var_name"
-            create_response=$(curl -s -L -X PUT \
+            create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables"
+            create_response=$(curl -s -L -X POST \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
-              -d "{\"value\":\"$var_value\"}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -d "{\"name\":\"$var_name\",\"value\":\"$var_value\"}" \
               "$create_var_url")
 
             if [[ "$(echo "$create_response" | jq -r '.message')" != "created" ]]; then
