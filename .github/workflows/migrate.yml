@@ -28,13 +28,11 @@ jobs:
 
           echo "API Response: $response"
 
-          # Check if the response contains secrets
           if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
             echo "No secrets found in source environment."
             exit 1
           fi
 
-          # Extract secret names to process
           echo "$response" | jq -r '.secrets[] | .name' > secrets.env
 
       - name: Create Secrets in Destination Environment
@@ -43,7 +41,6 @@ jobs:
           owner="Jyothish278"
           repo="Actions"
 
-          # Get the public key for the destination environment
           key_info=$(curl -s -L \
             -X GET \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -53,29 +50,12 @@ jobs:
           key_id=$(echo "$key_info" | jq -r '.key_id')
           public_key=$(echo "$key_info" | jq -r '.key')
 
-          # Read the secret names from the file created in the previous step
           while IFS= read -r secret_name; do
-            # Use the secret name as the placeholder value
             placeholder_value="$secret_name"
 
-            # Encrypt the placeholder value using the public key
-            encrypted_value=$(python3 -c "
-import sys
-from base64 import b64encode
-from nacl import encoding, public
+            # Call the Python script to encrypt the placeholder value
+            encrypted_value=$(python3 encrypt_secret.py "$public_key" "$placeholder_value")
 
-def encrypt(public_key: str, secret_value: str) -> str:
-    public_key = public.PublicKey(public_key.encode('utf-8'), encoding.Base64Encoder())
-    sealed_box = public.SealedBox(public_key)
-    encrypted = sealed_box.encrypt(secret_value.encode('utf-8'))
-    return b64encode(encrypted).decode('utf-8')
-
-public_key = sys.argv[1]
-secret_value = sys.argv[2]
-print(encrypt(public_key, secret_value))
-" "$public_key" "$placeholder_value")
-
-            # Create the secret in the destination environment
             create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
             create_response=$(curl -s -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -107,7 +87,6 @@ print(encrypt(public_key, secret_value))
 
           echo "API Response: $response"
 
-          # Check if the response contains variables
           if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
             echo "No variables found in source environment."
             exit 1
