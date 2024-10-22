@@ -72,6 +72,8 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
+            echo "Create Secret Response: $create_response"  # Log the response for debugging
+
             if [[ "$(echo "$create_response" | jq -r '.message')" != "created" ]]; then
               echo "Error creating secret '$secret_name': $create_response"
               exit 1
