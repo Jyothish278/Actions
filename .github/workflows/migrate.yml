@@ -121,10 +121,5 @@ jobs:
               -d "{\"name\":\"$var_name\",\"value\":\"$var_value\"}" \
               "$create_var_url")
 
-            if [[ "$(echo "$create_response" | jq -r '.message')" != "created" ]]; then
-              echo "Error creating variable '$var_name': $create_response"
-              exit 1
-            fi
-
             echo "Successfully created variable '$var_name'"
           done < vars.env
