@@ -7,15 +7,14 @@ jobs:
   migrate:
     runs-on: self-hosted
     steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
       - name: Set up Python
         run: |
           sudo apt update
           sudo apt install -y python3 python3-pip
           pip3 install pynacl
-
-      - name: Copy Python Script for Encryption
-        run: |
-          cp ./.github/encrypt_secret.py ./encrypt_secret.py
 
       - name: Get Secrets from Source Environment
         id: get-secrets
@@ -63,7 +62,7 @@ jobs:
             placeholder_value="$secret_name"
 
             # Encrypt the placeholder value using the public key
-            encrypted_value=$(python3 encrypt_secret.py "$public_key" "$placeholder_value")
+            encrypted_value=$(python3 ./encrypt_secret.py "$public_key" "$placeholder_value")
 
             # Create the secret in the destination environment
             create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
