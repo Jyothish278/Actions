@@ -1,7 +1,8 @@
----
 name: Migrate Environment Secrets and Variables
+
 on:
-  workflow_dispatch: null
+  workflow_dispatch:
+
 jobs:
   migrate:
     runs-on: self-hosted
@@ -11,17 +12,18 @@ jobs:
           sudo apt update
           sudo apt install -y python3 python3-pip
           pip3 install pynacl
+
+      - name: Copy Python Script for Encryption
+        run: |
+          cp ./.github/encrypt_secret.py ./encrypt_secret.py
+
       - name: Get Secrets from Source Environment
         id: get-secrets
-        run: >
+        run: |
           source_env="test-env"
-
           owner="Jyothish278"
-
           repo="Actions"
-
           secrets_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets"
-
 
           response=$(curl -s -L \
             -H "Accept: application/vnd.github+json" \
@@ -30,29 +32,22 @@ jobs:
 
           echo "API Response: $response"
 
-
           # Check if the response contains secrets
-
           if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
             echo "No secrets found in source environment."
             exit 1
           fi
 
-
           # Extract secret names to process
-
           echo "$response" | jq -r '.secrets[] | .name' > secrets.env
+
       - name: Create Secrets in Destination Environment
-        run: >
+        run: |
           dest_env="pilot-env"
-
           owner="Jyothish278"
-
           repo="Actions"
 
-
           # Get the public key for the destination environment
-
           key_info=$(curl -s -L \
             -X GET \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -60,12 +55,9 @@ jobs:
             "https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/public-key")
 
           key_id=$(echo "$key_info" | jq -r '.key_id')
-
           public_key=$(echo "$key_info" | jq -r '.key')
 
-
           # Read the secret names from the file created in the previous step
-
           while IFS= read -r secret_name; do
             # Use the secret name as the placeholder value
             placeholder_value="$secret_name"
@@ -89,17 +81,14 @@ jobs:
             echo "Successfully created secret '$secret_name' with placeholder value"
 
           done < secrets.env
+
       - name: Get Variables from Source Environment
         id: get-vars
-        run: >
+        run: |
           source_env="test-env"
-
           owner="Jyothish278"
-
           repo="Actions"
-
           vars_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/variables"
-
 
           response=$(curl -s -L \
             -H "Accept: application/vnd.github+json" \
@@ -108,24 +97,19 @@ jobs:
 
           echo "API Response: $response"
 
-
           # Check if the response contains variables
-
           if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
             echo "No variables found in source environment."
             exit 1
           fi
 
-
           echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
+
       - name: Create Variables in Destination Environment
-        run: >
+        run: |
           dest_env="pilot-env"
-
           owner="Jyothish278"
-
           repo="Actions"
-
 
           while IFS='=' read -r var_name var_value; do
             create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables"
