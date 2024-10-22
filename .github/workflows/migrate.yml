@@ -104,7 +104,7 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
-            if [[ $? -ne 0 ]]; then
+            if [[ "$(echo "$create_response" | jq -r '.message')" != "created" ]]; then
               echo "Error creating secret '$secret_name': $create_response"
               exit 1
             fi
@@ -149,7 +149,7 @@ jobs:
               -d "{\"value\":\"$var_value\"}" \
               "$create_var_url")
 
-            if [[ $? -ne 0 ]]; then
+            if [[ "$(echo "$create_response" | jq -r '.message')" != "created" ]]; then
               echo "Error creating variable '$var_name': $create_response"
               exit 1
             fi
