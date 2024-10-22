@@ -47,29 +47,13 @@ jobs:
           key_id=$(echo "$key_info" | jq -r '.key_id')
           public_key=$(echo "$key_info" | jq -r '.key')
 
-          # Read the secrets from the file created in the previous step
+          # Read the secret names from the file created in the previous step
           while IFS= read -r secret_name; do
-            # Get the actual secret value
-            secret_value_response=$(curl -s -L \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-              "https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets/$secret_name")
+            # Temporarily set a value for the secret
+            temporary_value="temporary-value-for-${secret_name}"  # You can customize this
 
-            if [[ "$(echo "$secret_value_response" | jq -r '.message')" == "Not Found" ]]; then
-              echo "Secret '$secret_name' not found in source environment."
-              continue
-            fi
-
-            actual_value=$(echo "$secret_value_response" | jq -r '.value')
-
-            # Check if actual_value is null or empty
-            if [[ -z "$actual_value" ]]; then
-              echo "No value found for secret '$secret_name'."
-              continue
-            fi
-
-            # Encrypt the value using the public key
-            encrypted_value=$(echo -n "$actual_value" | openssl pkeyutl -encrypt -pubin -inkey <(echo "$public_key" | base64 --decode) | base64)
+            # Encrypt the temporary value using the public key
+            encrypted_value=$(echo -n "$temporary_value" | openssl pkeyutl -encrypt -pubin -inkey <(echo "$public_key" | base64 --decode) | base64)
 
             # Create the secret in the destination environment
             create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
