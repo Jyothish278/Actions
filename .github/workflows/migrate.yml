@@ -19,9 +19,9 @@ jobs:
       - name: Get Secrets from Source Environment
         id: get-secrets
         run: |
-          source_env="test-env"
-          owner="Jyothish278"
-          repo="Actions"
+          source_env=${{ vars.SOURCE_ENV }}
+          owner="${{ vars.OWNER }}
+          repo=${{ vars.REPO }}
           secrets_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets"
 
           response=$(curl -s -L \
@@ -42,9 +42,9 @@ jobs:
 
       - name: Create Secrets in Destination Environment
         run: |
-          dest_env="pilot-env"
-          owner="Jyothish278"
-          repo="Actions"
+          dest_env=${{ vars.DEST_ENV }}
+          owner="${{ vars.OWNER }}
+          repo=${{ vars.REPO }}
 
           # Get the public key for the destination environment
           key_info=$(curl -s -L \
@@ -86,9 +86,9 @@ jobs:
       - name: Get Variables from Source Environment
         id: get-vars
         run: |
-          source_env="test-env"
-          owner="Jyothish278"
-          repo="Actions"
+          source_env=${{ vars.SOURCE_ENV }}
+          owner="${{ vars.OWNER }}
+          repo=${{ vars.REPO }}
           vars_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/variables"
 
           response=$(curl -s -L \
@@ -108,9 +108,9 @@ jobs:
 
       - name: Create Variables in Destination Environment
         run: |
-          dest_env="pilot-env"
-          owner="Jyothish278"
-          repo="Actions"
+          dest_env=${{ vars.DEST_ENV }}
+          owner="${{ vars.OWNER }}
+          repo=${{ vars.REPO }}
 
           while IFS='=' read -r var_name var_value; do
             create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables"
