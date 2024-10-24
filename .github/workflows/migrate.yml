@@ -9,7 +9,7 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v2
-	
+        
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
@@ -29,7 +29,7 @@ jobs:
         run: |
           source venv/bin/activate
           pip install --upgrade pip
-		  pip install pynacl
+          pip install pynacl
 
       - name: Get Secrets from Source Environment
         id: get-secrets
