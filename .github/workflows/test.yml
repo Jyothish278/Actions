@@ -4,9 +4,22 @@ on:
   workflow_dispatch:
 
 jobs:
+  set_environment_runner:
+    outputs:
+      env: ${{ steps.setenv.outputs.env }}
+      runner: ${{ steps.setenv.outputs.runner }}
+    runs-on: self-hosted
+    steps:
+    - id: setenv
+      run: |
+        echo "::set-output name=env::dev-env"
+        echo "::set-output name=runner::self-hosted"
+
   migrate:
-    runs-on: "${{ RUNNER }}"
-    environment: "${{ SOURCE_ENV }}"
+    runs-on: self-hosted
+    needs: set_environment_runner
+    environment:
+         name: ${{ needs.set_environment_runner.outputs.env }}
     steps:
       - name: Create and activate virtual environment
         run: |
