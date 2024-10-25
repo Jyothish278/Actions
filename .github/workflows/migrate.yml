@@ -98,7 +98,12 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
-            echo "Successfully created secret '$secret_name'"
+            if [[ "$(echo "$create_response" | jq -r '.message')" == "null" ]]; then
+              echo "Successfully created secret '$secret_name'"
+            else
+              echo "Failed to create secret '$secret_name': $(echo "$create_response" | jq -r '.message')"
+              exit 1
+            fi
 
           done < secrets.env
 
@@ -146,5 +151,10 @@ jobs:
               -d "{\"name\":\"$var_name\",\"value\":\"$var_value\"}" \
               "$create_var_url")
 
-            echo "Successfully created variable '$var_name'"
+            if [[ "$(echo "$create_response" | jq -r '.message')" == "null" ]]; then
+              echo "Successfully created variable '$var_name'"
+            else
+              echo "Failed to create variable '$var_name': $(echo "$create_response" | jq -r '.message')"
+              exit 1
+            fi
           done < vars.env
