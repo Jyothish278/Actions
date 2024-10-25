@@ -1,0 +1,14 @@
+name: Migrate Environment Secrets and Variables
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: "${{ RUNNER }}"
+    environment: "${{ SOURCE_ENV }}"
+    steps:
+      - name: Create and activate virtual environment
+        run: |
+          source_env="${{ vars.env }}"
+          echo "$source_env"
