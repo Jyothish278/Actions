@@ -10,18 +10,28 @@ jobs:
       runner: ${{ steps.setenv.outputs.runner }}
     runs-on: self-hosted
     steps:
-    - id: setenv
-      run: |
-        echo "env=${{ vars.DEV }}" >>$GITHUB_OUTPUT
-        echo "runner=${{ vars.RUNNER }}" >>$GITHUB_OUTPUT
+      - id: setenv
+        run: |
+          # Get the tag from github.ref
+          tag=${{ github.ref }}
+          
+          # Remove the 'refs/tags/' prefix if it exists
+          tag=${tag#refs/tags/}
+
+          # Extract environment and runner from the tag
+          IFS='/' read -r client env runner <<< "$tag"
+          
+          # Set the outputs
+          echo "env=$env" >> $GITHUB_OUTPUT
+          echo "runner=$runner" >> $GITHUB_OUTPUT
 
   migrate:
     runs-on: ${{ needs.set_environment_runner.outputs.runner }}
     needs: set_environment_runner
     environment:
-         name: ${{ needs.set_environment_runner.outputs.env }}
+      name: ${{ needs.set_environment_runner.outputs.env }}
     steps:
       - name: Create and activate virtual environment
         run: |
-          source_env="${{ vars.env }}"
+          source_env="${{ needs.set_environment_runner.outputs.env }}"
           echo "$source_env"
