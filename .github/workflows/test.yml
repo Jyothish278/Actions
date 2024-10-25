@@ -23,5 +23,5 @@ jobs:
     steps:
       - name: Create and activate virtual environment
         run: |
-          source_env="${{ vars.env }}"
+          source_env="${{ env.env }}"
           echo "$source_env"
