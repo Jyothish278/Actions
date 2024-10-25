@@ -10,16 +10,16 @@ jobs:
       runner: ${{ steps.setenv.outputs.runner }}
     runs-on: self-hosted
     steps:
-    - id: setenv
-      run: |
-        echo "::set-output name=env::main-env"
-        echo "::set-output name=runner::self-hosted"
+      - id: setenv
+        run: |
+          echo "env=main-env" >> $GITHUB_ENV
+          echo "runner=self-hosted" >> $GITHUB_ENV
 
   migrate:
     runs-on: self-hosted
     needs: set_environment_runner
     environment:
-         name: ${{ needs.set_environment_runner.outputs.env }}
+      name: ${{ needs.set_environment_runner.outputs.env }}
     steps:
       - name: Create and activate virtual environment
         run: |
