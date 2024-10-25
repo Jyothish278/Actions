@@ -41,6 +41,9 @@ jobs:
           page=1
           total_secrets=0
 
+          # Clear secrets.env file to start fresh
+          > secrets.env
+
           while : ; do
             response=$(curl -s -L \
               -H "Accept: application/vnd.github+json" \
@@ -104,7 +107,6 @@ jobs:
               "$create_secret_url")
 
             echo "Successfully created secret '$secret_name'"
-
           done < secrets.env
 
       - name: Get Variables from Source Environment
@@ -116,6 +118,9 @@ jobs:
           vars_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/variables"
           page=1
           total_vars=0
+
+          # Clear vars.env file to start fresh
+          > vars.env
 
           while : ; do
             response=$(curl -s -L \
@@ -176,5 +181,4 @@ jobs:
               "$create_var_url")
 
             echo "Successfully created variable '$var_name'"
-
           done < vars.env
