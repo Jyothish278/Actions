@@ -94,9 +94,8 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
-
             echo "Successfully created secret '$secret_name'"
-
+            sleep 3
           done < secrets.env
 
       - name: Get Variables from Source Environment
@@ -119,7 +118,7 @@ jobs:
             echo "No variables found in source environment."
             #exit 1
           fi
-
+          
           echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
 
       - name: Create Variables in Destination Environment
@@ -138,4 +137,5 @@ jobs:
               "$create_var_url")
 
             echo "Successfully created variable '$var_name'"
+            sleep 3
           done < vars.env
