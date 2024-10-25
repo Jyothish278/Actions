@@ -47,11 +47,18 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               "$secrets_url?per_page=100&page=$page")
 
-            secrets_count=$(echo "$response" | jq -r '.total_count')
-            total_secrets=$((total_secrets + secrets_count))
-            echo "$response" | jq -r '.secrets[] | .name' >> secrets.env
+            if [[ $? -ne 0 ]]; then
+              echo "Failed to fetch secrets from API"
+              exit 1
+            fi
 
-            # Break if there are no more secrets
+            secrets_count=$(echo "$response" | jq -r '.total_count')
+
+            if [[ "$secrets_count" -gt 0 ]]; then
+              total_secrets=$((total_secrets + secrets_count))
+              echo "$response" | jq -r '.secrets[] | .name' >> secrets.env
+            fi
+
             if [[ "$secrets_count" -lt 100 ]]; then
               break
             fi
@@ -60,6 +67,18 @@ jobs:
 
           echo "Total secrets fetched: $total_secrets"
 
+      - name: Validate Secrets Count
+        run: |
+          expected_secrets_count=$(wc -l < secrets.env)
+          echo "Expected secrets count: $expected_secrets_count"
+
+          if [[ "$expected_secrets_count" -ne "$total_secrets" ]]; then
+            echo "Mismatch in fetched secrets count! Expected: $total_secrets, Found: $expected_secrets_count"
+            exit 1
+          else
+            echo "Secrets count validated successfully."
+          fi
+
       - name: Create Secrets in Destination Environment
         run: |
           source venv/bin/activate
@@ -67,7 +86,6 @@ jobs:
           owner="${{ vars.OWNER }}"
           repo="${{ vars.REPO }}"
 
-          # Get the public key for the destination environment
           key_info=$(curl -s -L \
             -X GET \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -77,20 +95,10 @@ jobs:
           key_id=$(echo "$key_info" | jq -r '.key_id')
           public_key=$(echo "$key_info" | jq -r '.key')
 
-          # Read the secret names from the file created in the previous step
           while IFS= read -r secret_name; do
-            # Use the secret name as the placeholder value
             placeholder_value="$secret_name"
-
-            # Encrypt the placeholder value using the public key
             encrypted_value=$(python3 encrypt_secret.py "$public_key" "$placeholder_value")
 
-            # Log the details before creating the secret
-            echo "Creating secret with:"
-            echo "  Secret Name: $secret_name"
-            echo "  Create URL: https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
-
-            # Create the secret in the destination environment
             create_secret_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
             create_response=$(curl -s -L -X PUT \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -98,7 +106,12 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
-            echo "Successfully created secret '$secret_name'"
+            if [[ "$(echo "$create_response" | jq -r '.message')" == "null" ]]; then
+              echo "Successfully created secret '$secret_name'"
+            else
+              echo "Failed to create secret '$secret_name': $(echo "$create_response" | jq -r '.message')"
+              exit 1
+            fi
 
           done < secrets.env
 
@@ -118,11 +131,18 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               "$vars_url?per_page=100&page=$page")
 
-            vars_count=$(echo "$response" | jq -r '.total_count')
-            total_vars=$((total_vars + vars_count))
-            echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' >> vars.env
+            if [[ $? -ne 0 ]]; then
+              echo "Failed to fetch variables from API"
+              exit 1
+            fi
 
-            # Break if there are no more variables
+            vars_count=$(echo "$response" | jq -r '.total_count')
+
+            if [[ "$vars_count" -gt 0 ]]; then
+              total_vars=$((total_vars + vars_count))
+              echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' >> vars.env
+            fi
+
             if [[ "$vars_count" -lt 100 ]]; then
               break
             fi
@@ -131,6 +151,18 @@ jobs:
 
           echo "Total variables fetched: $total_vars"
 
+      - name: Validate Variables Count
+        run: |
+          expected_vars_count=$(wc -l < vars.env)
+          echo "Expected variables count: $expected_vars_count"
+
+          if [[ "$expected_vars_count" -ne "$total_vars" ]]; then
+            echo "Mismatch in fetched variables count! Expected: $total_vars, Found: $expected_vars_count"
+            exit 1
+          else
+            echo "Variables count validated successfully."
+          fi
+
       - name: Create Variables in Destination Environment
         run: |
           dest_env="${{ vars.DEST_ENV }}"
@@ -138,6 +170,14 @@ jobs:
           repo="${{ vars.REPO }}"
 
           while IFS='=' read -r var_name var_value; do
+            var_name=$(echo "$var_name" | xargs)
+            var_value=$(echo "$var_value" | xargs)
+
+            if [[ -z "$var_name" ]]; then
+              echo "Skipping empty variable name"
+              continue
+            fi
+
             create_var_url="https://api.github.com/repos/$owner/$repo/environments/$dest_env/variables"
             create_response=$(curl -s -L -X POST \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
@@ -146,5 +186,10 @@ jobs:
               -d "{\"name\":\"$var_name\",\"value\":\"$var_value\"}" \
               "$create_var_url")
 
-            echo "Successfully created variable '$var_name'"
+            if [[ "$(echo "$create_response" | jq -r '.message')" == "null" ]]; then
+              echo "Successfully created variable '$var_name'"
+            else
+              echo "Failed to create variable '$var_name': $(echo "$create_response" | jq -r '.message')"
+              exit 1
+            fi
           done < vars.env
