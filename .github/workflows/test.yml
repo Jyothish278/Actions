@@ -12,7 +12,7 @@ jobs:
     steps:
     - id: setenv
       run: |
-        echo "::set-output name=env::dev-env"
+        echo "::set-output name=env::main-env"
         echo "::set-output name=runner::self-hosted"
 
   migrate:
