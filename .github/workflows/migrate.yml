@@ -5,7 +5,7 @@ on:
 
 jobs:
   migrate:
-    runs-on: odh-mtce
+    runs-on: self-hosted
     steps:
       - name: Check out code
         uses: actions/checkout@v2
