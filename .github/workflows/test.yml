@@ -16,7 +16,7 @@ jobs:
         echo "runner=self-hosted" >>$GITHUB_OUTPUT
 
   migrate:
-    runs-on: self-hosted
+    runs-on: ${{ needs.set_environment_runner.outputs.runner }}
     needs: set_environment_runner
     environment:
          name: ${{ needs.set_environment_runner.outputs.env }}
