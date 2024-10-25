@@ -45,7 +45,7 @@ jobs:
             response=$(curl -s -L \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-              "$secrets_url?per_page=100&page=$page")
+              "$secrets_url?page=$page&per_page=100")
 
             secrets_count=$(echo "$response" | jq -r '.total_count')
 
@@ -102,7 +102,7 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
-            
+
             echo "Successfully created secret '$secret_name'"
 
           done < secrets.env
@@ -121,15 +121,8 @@ jobs:
             response=$(curl -s -L \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-              "$vars_url?per_page=100&page=$page")
+              "$vars_url?page=$page&per_page=100")
 
-            # Check for errors in the API response
-            if [[ $? -ne 0 ]]; then
-              echo "Failed to fetch variables from API"
-              exit 1
-            fi
-
-            # Count how many variables are returned
             vars_count=$(echo "$response" | jq -r '.total_count')
 
             if [[ "$vars_count" -gt 0 ]]; then
@@ -137,7 +130,6 @@ jobs:
               echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' >> vars.env
             fi
 
-            # Break if there are no more variables
             if [[ "$vars_count" -lt 100 ]]; then
               break
             fi
@@ -146,7 +138,6 @@ jobs:
 
           echo "Total variables fetched: $total_vars"
           echo "total_vars=${total_vars}" >> $GITHUB_ENV
-
 
       - name: Validate Variables Count
         run: |
@@ -183,7 +174,7 @@ jobs:
               -H "X-GitHub-Api-Version: 2022-11-28" \
               -d "{\"name\":\"$var_name\",\"value\":\"$var_value\"}" \
               "$create_var_url")
-            
+
             echo "Successfully created variable '$var_name'"
 
           done < vars.env
