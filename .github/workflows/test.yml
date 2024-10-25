@@ -12,9 +12,8 @@ jobs:
     steps:
       - id: setenv
         run: |
-          echo "env=main-env" >>$GITHUB_OUTPUT
-          echo "runner=self-hosted" >>$GITHUB_OUTPUT
-
+          echo "::set-output name=env::main-env"
+          echo "::set-output name=runner::self-hosted"
   migrate:
     runs-on: self-hosted
     needs: set_environment_runner
