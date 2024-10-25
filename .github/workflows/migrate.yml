@@ -38,23 +38,27 @@ jobs:
           owner="${{ vars.OWNER }}"
           repo="${{ vars.REPO }}"
           secrets_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/secrets"
+          page=1
+          total_secrets=0
 
-          response=$(curl -s -L \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            "$secrets_url")
+          while : ; do
+            response=$(curl -s -L \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+              "$secrets_url?per_page=100&page=$page")
 
-          echo "API Response: $response"
+            secrets_count=$(echo "$response" | jq -r '.total_count')
+            total_secrets=$((total_secrets + secrets_count))
+            echo "$response" | jq -r '.secrets[] | .name' >> secrets.env
 
-          # Check if the response contains secrets
-          if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
-            echo "No secrets found in source environment."
-          fi
+            # Break if there are no more secrets
+            if [[ "$secrets_count" -lt 100 ]]; then
+              break
+            fi
+            page=$((page + 1))
+          done
 
-          # Extract secret names to process and write to file
-          echo "$response" | jq -r '.secrets[] | .name' > secrets.env
-          echo "Secrets written to secrets.env:"
-          cat secrets.env  # Debugging line to verify contents
+          echo "Total secrets fetched: $total_secrets"
 
       - name: Create Secrets in Destination Environment
         run: |
@@ -94,14 +98,7 @@ jobs:
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
 
-            # Check for successful creation
-            if [[ "$create_response" == *"201 Created"* ]]; then
-              echo "Successfully created secret '$secret_name'"
-            else
-              echo "Error creating secret '$secret_name': $create_response"
-            fi
-
-            sleep 1  # Pause to avoid hitting rate limits
+            echo "Successfully created secret '$secret_name'"
 
           done < secrets.env
 
@@ -112,23 +109,27 @@ jobs:
           owner="${{ vars.OWNER }}"
           repo="${{ vars.REPO }}"
           vars_url="https://api.github.com/repos/$owner/$repo/environments/$source_env/variables"
+          page=1
+          total_vars=0
 
-          response=$(curl -s -L \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            "$vars_url")
+          while : ; do
+            response=$(curl -s -L \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+              "$vars_url?per_page=100&page=$page")
 
-          echo "API Response: $response"
+            vars_count=$(echo "$response" | jq -r '.total_count')
+            total_vars=$((total_vars + vars_count))
+            echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' >> vars.env
 
-          # Check if the response contains variables
-          if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
-            echo "No variables found in source environment."
-          fi
+            # Break if there are no more variables
+            if [[ "$vars_count" -lt 100 ]]; then
+              break
+            fi
+            page=$((page + 1))
+          done
 
-          # Write each variable to the file
-          echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
-          echo "Variables written to vars.env:"
-          cat vars.env  # Debugging line to verify contents
+          echo "Total variables fetched: $total_vars"
 
       - name: Create Variables in Destination Environment
         run: |
@@ -145,12 +146,5 @@ jobs:
               -d "{\"name\":\"$var_name\",\"value\":\"$var_value\"}" \
               "$create_var_url")
 
-            if [[ "$create_response" == *"201 Created"* ]]; then
-              echo "Successfully created variable '$var_name'"
-            else
-              echo "Error creating variable '$var_name': $create_response"
-            fi
-
-            sleep 1  # Pause to avoid hitting rate limits
-
+            echo "Successfully created variable '$var_name'"
           done < vars.env
