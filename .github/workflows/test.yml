@@ -1,4 +1,4 @@
-name: Migrate Environment Secrets and Variables
+name: Dynamic Test
 
 on:
   workflow_dispatch:
