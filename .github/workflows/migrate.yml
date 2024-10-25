@@ -49,11 +49,12 @@ jobs:
           # Check if the response contains secrets
           if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
             echo "No secrets found in source environment."
-            #exit 1
           fi
 
-          # Extract secret names to process
+          # Extract secret names to process and write to file
           echo "$response" | jq -r '.secrets[] | .name' > secrets.env
+          echo "Secrets written to secrets.env:"
+          cat secrets.env  # Debugging line to verify contents
 
       - name: Create Secrets in Destination Environment
         run: |
@@ -83,8 +84,6 @@ jobs:
             # Log the details before creating the secret
             echo "Creating secret with:"
             echo "  Secret Name: $secret_name"
-            #echo "  Key ID: $key_id"
-            #echo "  Encrypted Value: $encrypted_value"
             echo "  Create URL: https://api.github.com/repos/$owner/$repo/environments/$dest_env/secrets/$secret_name"
 
             # Create the secret in the destination environment
@@ -94,8 +93,16 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -d "{\"encrypted_value\":\"$encrypted_value\",\"key_id\":\"$key_id\"}" \
               "$create_secret_url")
-            echo "Successfully created secret '$secret_name'"
-            sleep 3
+
+            # Check for successful creation
+            if [[ "$create_response" == *"201 Created"* ]]; then
+              echo "Successfully created secret '$secret_name'"
+            else
+              echo "Error creating secret '$secret_name': $create_response"
+            fi
+
+            sleep 1  # Pause to avoid hitting rate limits
+
           done < secrets.env
 
       - name: Get Variables from Source Environment
@@ -116,10 +123,12 @@ jobs:
           # Check if the response contains variables
           if [[ "$(echo "$response" | jq -r '.total_count')" -eq 0 ]]; then
             echo "No variables found in source environment."
-            #exit 1
           fi
-          
+
+          # Write each variable to the file
           echo "$response" | jq -r '.variables[] | "\(.name)=\(.value)"' > vars.env
+          echo "Variables written to vars.env:"
+          cat vars.env  # Debugging line to verify contents
 
       - name: Create Variables in Destination Environment
         run: |
@@ -136,6 +145,12 @@ jobs:
               -d "{\"name\":\"$var_name\",\"value\":\"$var_value\"}" \
               "$create_var_url")
 
-            echo "Successfully created variable '$var_name'"
-            sleep 3
+            if [[ "$create_response" == *"201 Created"* ]]; then
+              echo "Successfully created variable '$var_name'"
+            else
+              echo "Error creating variable '$var_name': $create_response"
+            fi
+
+            sleep 1  # Pause to avoid hitting rate limits
+
           done < vars.env
