@@ -1,0 +1,106 @@
+name: Install and Configure Keycloak
+
+on:
+  workflow_dispatch:
+    inputs:
+      update_flag:
+        description: 'Set the update flag'
+        required: true
+        type: boolean
+      job:
+        description: 'Which job to run?'
+        required: true
+        type: choice
+        options:
+          - 'Install Keycloak'
+          - 'Configure Keycloak'
+      location:
+        description: 'Enter the location'
+        required: true
+        type: string
+      environment:
+        description: 'Enter the environment'
+        required: true
+        type: string
+
+jobs:
+  check_dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Check if required dependencies are installed (kubectl, helm, python)
+        run: |
+          echo "Checking if kubectl is installed"
+          if ! command -v kubectl &> /dev/null; then
+            echo "kubectl is not installed, installing..."
+            curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+            chmod +x kubectl
+            mv ./kubectl /usr/local/bin/kubectl
+          else
+            echo "kubectl is already installed"
+          fi
+          
+          echo "Checking if helm is installed"
+          if ! command -v helm &> /dev/null; then
+            echo "helm is not installed, installing..."
+            curl -o helm.tar.gz https://get.helm.sh/helm-v3.11.0-linux-amd64.tar.gz
+            tar -xzf helm.tar.gz
+            chmod +x ./linux-amd64/helm
+            mv ./linux-amd64/helm /usr/local/bin/helm
+          else
+            echo "helm is already installed"
+          fi
+
+          echo "Checking if Python is installed"
+          python3 --version
+
+  install_keycloak:
+    runs-on: ubuntu-latest
+    needs: check_dependencies
+    if: ${{ github.event.inputs.job == 'Install Keycloak' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Install Ansible
+        run: |
+          sudo apt update
+          sudo apt install -y ansible
+
+      - name: Run Keycloak Install Playbook
+        run: |
+          ansible-playbook install_helm_keycloak.yaml --extra-vars "location=${{ github.event.inputs.location }} environment=${{ github.event.inputs.environment }}"
+      
+  configure_keycloak:
+    runs-on: ubuntu-latest
+    needs: check_dependencies
+    if: ${{ github.event.inputs.job == 'Configure Keycloak' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Install Ansible
+        run: |
+          sudo apt update
+          sudo apt install -y ansible
+
+      - name: Run Keycloak Configuration Playbook
+        run: |
+          ansible-playbook configure_keycloak.yaml --extra-vars "update_flag=${{ github.event.inputs.update_flag }}"
