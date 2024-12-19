@@ -6,7 +6,10 @@ on:
       update_flag:
         description: 'Set the update flag'
         required: true
-        type: boolean
+        type: choice
+        options:
+          - 'Yes'
+          - 'No'
       job:
         description: 'Which job to run?'
         required: true
@@ -81,7 +84,7 @@ jobs:
 
       - name: Run Keycloak Install Playbook
         run: |
-          ansible-playbook install_helm_keycloak.yaml --extra-vars "location=${{ github.event.inputs.location }} environment=${{ github.event.inputs.environment }}"
+          ansible-playbook install_helm_keycloak.yaml --extra-vars "location=${{ github.event.inputs.location }} environment=${{ github.event.inputs.environment }} update_flag={{ 'true' if github.event.inputs.update_flag == 'Yes' else 'false' }}"
       
   configure_keycloak:
     runs-on: ubuntu-latest
